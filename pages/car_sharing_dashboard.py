@@ -94,3 +94,14 @@ st.subheader("Revenue Share by Car Model")
 revenue_model = trips_merged.groupby("model")["revenue"].sum().reset_index()
 fig3 = px.pie(revenue_model, values="revenue", names="model", title="Revenue Share by Model")
 st.plotly_chart(fig3)
+
+
+city_filter = st.sidebar.multiselect("Select the City", trips_merged["city_name"].unique(), key="city_filter")
+if city_filter:
+    trips_merged = trips_merged[trips_merged["city_name"].isin(city_filter)]
+
+
+trips_merged['year_trip'] = pd.to_datetime(trips_merged['pickup_time']).dt.year
+year_filter = st.sidebar.multiselect("Select the Year", sorted(trips_merged["year_trip"].unique()), key="year_filter")
+if year_filter:
+    trips_merged = trips_merged[trips_merged["year_trip"].isin(year_filter)]
