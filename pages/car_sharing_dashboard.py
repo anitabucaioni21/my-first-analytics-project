@@ -105,3 +105,23 @@ trips_merged['year_trip'] = pd.to_datetime(trips_merged['pickup_time']).dt.year
 year_filter = st.sidebar.multiselect("Select the Year", sorted(trips_merged["year_trip"].unique()), key="year_filter")
 if year_filter:
     trips_merged = trips_merged[trips_merged["year_trip"].isin(year_filter)]
+
+import pydeck as pdk
+
+st.subheader("Pickup Locations Map")
+pickup_map = trips_merged[['pickup_lat', 'pickup_lon']].dropna()
+st.map(pickup_map.rename(columns={'pickup_lat': 'lat', 'pickup_lon': 'lon'}))
+
+st.subheader("Dropoff Locations Map")
+dropoff_map = trips_merged[['dropoff_lat', 'dropoff_lon']].dropna()
+st.map(dropoff_map.rename(columns={'dropoff_lat': 'lat', 'dropoff_lon': 'lon'}))
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Revenue Per Car Model")
+    st.bar_chart(trips_merged.groupby("model")["revenue"].sum())
+
+with col2:
+    st.subheader("Number of Trips Per Car Model")
+    st.bar_chart(trips_merged.groupby("model").size())
