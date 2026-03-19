@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 @st.cache_data
 def load_data():
@@ -10,36 +11,15 @@ def load_data():
 
 trips, cars, cities = load_data()
 
-import streamlit as st
-import pandas as pd
-
-@st.cache_data
-def load_data():
-    trips = pd.read_csv("dataset/trips.csv")
-    cars = pd.read_csv("dataset/cars.csv")
-    cities = pd.read_csv("dataset/cities.csv")
-    return trips, cars, cities
-
-trips, cars, cities = load_data()
-
-# Merge trips with cars
-trips_merged = trips.merge(cars, left_on="car_id", right_on="id")
-
-# Merge with cities
+trips_merged = trips.merge(cars, left_on="car_id", right_on="id", suffixes=("_trip", "_car"))
 trips_merged = trips_merged.merge(cities, on="city_id")
-
-# Drop useless columns
-trips_merged = trips_merged.drop(columns=["id_x", "id_y", "city_id", "customer_id", "car_id"])
-
-# Convert dates
+trips_merged = trips_merged.drop(columns=["id_trip", "id_car", "car_id", "city_id"], errors="ignore")
 trips_merged['pickup_date'] = pd.to_datetime(trips_merged['pickup_time']).dt.date
 
-# Sidebar filter
-cars_brand = st.sidebar.multiselect("Select the Car Brand", trips_merged["brand"].unique())
+cars_brand = st.sidebar.multiselect("Select the Car Brand", trips_merged["brand"].unique(), key="brand_filter")
 if cars_brand:
     trips_merged = trips_merged[trips_merged["brand"].isin(cars_brand)]
 
-# Metrics
 total_trips = len(trips_merged)
 total_distance = trips_merged["distance"].sum()
 top_car = trips_merged.groupby("model")["revenue"].sum().idxmax()
@@ -54,29 +34,63 @@ with col3:
 
 st.write(trips_merged.head())
 
-st.title("Car Sharing Dashboard")
-
-# 1. Trips Over Time
 st.subheader("Trips Over Time")
 trips_over_time = trips_merged.groupby("pickup_date").size().reset_index(name="num_trips")
 st.line_chart(trips_over_time.set_index("pickup_date"))
 
-# 2. Revenue Per Car Model
 st.subheader("Revenue Per Car Model")
-revenue_per_model = trips_merged.groupby("model")["revenue"].sum()
-st.bar_chart(revenue_per_model)
+st.bar_chart(trips_merged.groupby("model")["revenue"].sum())
 
-# 3. Number of Trips Per Car Model
 st.subheader("Number of Trips Per Car Model")
-trips_per_model = trips_merged.groupby("model").size()
-st.bar_chart(trips_per_model)
+st.bar_chart(trips_merged.groupby("model").size())
 
-# 4. Revenue by City
 st.subheader("Revenue by City")
-revenue_by_city = trips_merged.groupby("city_name")["revenue"].sum()
-st.bar_chart(revenue_by_city)
+st.bar_chart(trips_merged.groupby("city_name")["revenue"].sum())
 
-# 5. Cumulative Revenue Growth Over Time
 st.subheader("Cumulative Revenue Growth Over Time")
-cumulative_revenue = trips_merged.groupby("pickup_date")["revenue"].sum().cumsum()
-st.area_chart(cumulative_revenue)
+st.area_chart(trips_merged.groupby("pickup_date")["revenue"].sum().cumsum())
+
+st.subheader("Average Trip Duration by City")
+trips_merged['duration_min'] = (
+    pd.to_datetime(trips_merged['dropoff_time']) - 
+    pd.to_datetime(trips_merged['pickup_time'])
+).dt.total_seconds() / 60
+st.bar_chart(trips_merged.groupby("city_name")["duration_min"].mean())
+
+st.subheader("Revenue by Car Brand")
+st.bar_chart(trips_merged.groupby("brand")["revenue"].sum())
+
+st.subheader("Distance Distribution by Model")
+st.bar_chart(trips_merged.groupby("model")["distance"].mean())
+
+st.subheader("Top 10 Customers by Revenue")
+st.bar_chart(trips_merged.groupby("customer_id")["revenue"].sum().nlargest(10))
+
+st.subheader("Average Daily Revenue Over Time")
+st.area_chart(trips_merged.groupby("pickup_date")["revenue"].mean())
+
+st.subheader("Trips by Day of Week")
+trips_merged['day_of_week'] = pd.to_datetime(trips_merged['pickup_time']).dt.day_name()
+trips_by_day = trips_merged.groupby("day_of_week").size().reindex(
+    ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+)
+st.bar_chart(trips_by_day)
+
+st.subheader("Revenue per KM by Car Model")
+trips_merged['revenue_per_km'] = trips_merged['revenue'] / trips_merged['distance']
+st.bar_chart(trips_merged.groupby("model")["revenue_per_km"].mean())
+
+st.subheader("Revenue Share by Car Brand")
+revenue_brand = trips_merged.groupby("brand")["revenue"].sum().reset_index()
+fig1 = px.pie(revenue_brand, values="revenue", names="brand", title="Revenue Share by Brand")
+st.plotly_chart(fig1)
+
+st.subheader("Trips Share by City")
+trips_city = trips_merged.groupby("city_name").size().reset_index(name="num_trips")
+fig2 = px.pie(trips_city, values="num_trips", names="city_name", title="Trips Share by City")
+st.plotly_chart(fig2)
+
+st.subheader("Revenue Share by Car Model")
+revenue_model = trips_merged.groupby("model")["revenue"].sum().reset_index()
+fig3 = px.pie(revenue_model, values="revenue", names="model", title="Revenue Share by Model")
+st.plotly_chart(fig3)
